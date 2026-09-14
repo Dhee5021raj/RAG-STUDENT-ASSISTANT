@@ -1,0 +1,29 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Vector DB & Embeddings
+chroma_db/
+chroma_db_test/
+*.onnx
+
+# Environment & Credentials
+.env
+
+# Temporary / Scratch Files
+tmp/
+*.tmp
+temp/
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
