@@ -12,6 +12,7 @@ __pycache__/
 # Vector DB & Embeddings
 chroma_db/
 chroma_db_test/
+chroma_db_hybrid_test/
 *.onnx
 
 # Environment & Credentials

@@ -1,6 +1,14 @@
 import re
 from typing import List, Dict, Any
 
+
+def estimate_tokens(text: str) -> int:
+    """Estimates the number of tokens in a text snippet (rough heuristic ~4 chars per token)."""
+    if not text:
+        return 0
+    return max(1, len(text) // 4)
+
+
 def _find_split_point(text: str, target_end: int, min_end: int) -> int:
     """
     Finds the best split point near target_end (paragraphs > sentences > words)
@@ -10,8 +18,12 @@ def _find_split_point(text: str, target_end: int, min_end: int) -> int:
         return len(text)
 
     window = text[min_end:target_end]
-    
-    # Priority 1: Double newline (paragraph break)
+
+    # Priority 1: Section headers or double newline (paragraph break)
+    header_pos = re.search(r'\n(?=#{1,6}\s|[A-Z0-9\s]{4,}:|\n)', window)
+    if header_pos:
+        return min_end + header_pos.start() + 1
+
     pos = window.rfind("\n\n")
     if pos != -1:
         return min_end + pos + 2
@@ -34,6 +46,7 @@ def _find_split_point(text: str, target_end: int, min_end: int) -> int:
     # Fallback to target_end
     return target_end
 
+
 def chunk_pages(
     pages: List[Dict[str, Any]],
     source_file: str = "unknown",
@@ -41,8 +54,8 @@ def chunk_pages(
     overlap: int = 100,
 ) -> List[Dict[str, Any]]:
     """
-    Splits extracted PDF pages into overlapping text chunks with source metadata,
-    respecting sentence and word boundaries so words are not sliced in half.
+    Splits extracted pages into overlapping text chunks with source metadata,
+    respecting sentence, header, and word boundaries so words are not sliced in half.
     """
     chunks: List[Dict[str, Any]] = []
     chunk_index = 0
@@ -52,7 +65,7 @@ def chunk_pages(
         text = page.get("text", "").strip()
 
         # Skip blank or near-empty pages
-        if len(text) < 30:
+        if len(text) < 20:
             continue
 
         start = 0
@@ -75,6 +88,8 @@ def chunk_pages(
                     "page": page_number,
                     "source_file": source_file,
                     "chunk_index": chunk_index,
+                    "token_count": estimate_tokens(chunk_text),
+                    "char_count": len(chunk_text)
                 })
                 chunk_index += 1
 
@@ -98,3 +113,4 @@ def chunk_pages(
             start = next_start
 
     return chunks
+
