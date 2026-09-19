@@ -7,6 +7,7 @@ from app.pdf_processor import extract_text_from_file
 from app.text_chunker import chunk_pages
 from app.vector_store import VectorStore
 from app.rag_engine import RAGEngine
+from app.exporter import export_chat_history, export_quiz
 
 load_dotenv()
 
@@ -39,6 +40,14 @@ st.markdown("""
         margin: 6px 0;
         border-radius: 4px;
         font-size: 0.9rem;
+    }
+    .badge-conf {
+        background-color: #DBEAFE;
+        color: #1E40AF;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 12px;
@@ -127,12 +136,15 @@ with st.sidebar:
 
                 st.success(f"Indexed {total_new_chunks} chunks from {len(uploaded_files)} file(s)!")
 
-    # Document Scope Filter
+    # Document Scope Filter & Hyperparameters
     st.divider()
-    st.subheader("🎯 Query Filter Scope")
+    st.subheader("🎯 Retrieval Hyperparameters")
     doc_filter_options = ["All Documents"] + st.session_state.processed_files
     selected_doc_filter = st.selectbox("Search Scope", options=doc_filter_options, index=0)
     active_filter = None if selected_doc_filter == "All Documents" else selected_doc_filter
+
+    top_k_val = st.slider("Top-K Retrieved Chunks", min_value=1, max_value=10, value=4)
+    dist_thresh_val = st.slider("Distance Threshold", min_value=0.5, max_value=2.0, value=1.25, step=0.05)
 
     # Database Statistics
     st.divider()
@@ -159,7 +171,7 @@ tab_chat, tab_quiz, tab_kb = st.tabs(["💬 Chat & Grounded QA", "⚡ Practice Q
 # ----------------- TAB 1: CHAT -----------------
 with tab_chat:
     # Quick Prompts Row
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("📝 Summarize Key Topics", use_container_width=True):
             st.session_state.quick_prompt = "Provide a comprehensive summary of the key topics covered in these materials."
@@ -172,6 +184,15 @@ with tab_chat:
                 {"role": "assistant", "content": "Chat history cleared. What would you like to ask about your materials?"}
             ]
             st.rerun()
+    with col4:
+        chat_md = export_chat_history(st.session_state.messages)
+        st.download_button(
+            "📥 Export Notes (.md)",
+            data=chat_md,
+            file_name="study_session_notes.md",
+            mime="text/markdown",
+            use_container_width=True
+        )
 
     st.divider()
 
@@ -180,11 +201,13 @@ with tab_chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if "sources" in msg and msg["sources"]:
-                with st.expander(f"🔍 Cited Sources ({len(msg['sources'])} Chunks)"):
+                latency_str = f" | ⚡ {msg.get('latency_ms', 0)}ms" if "latency_ms" in msg else ""
+                with st.expander(f"🔍 Cited Sources ({len(msg['sources'])} Chunks{latency_str})"):
                     for s in msg["sources"]:
+                        conf_pct = s.get("confidence", 85)
                         st.markdown(f"""
                         <div class="source-box">
-                            <strong>📄 {s['source']} — Page {s['page']}</strong><br/>
+                            <strong>📄 {s['source']} — Page {s['page']}</strong> <span class="badge-conf">🟢 {conf_pct}% Match</span><br/>
                             <em>"{s['text'][:300]}..."</em>
                         </div>
                         """, unsafe_allow_html=True)
@@ -210,20 +233,23 @@ with tab_chat:
             with st.spinner("Searching study material (Hybrid BM25 + Vector) & generating answer..."):
                 result = st.session_state.rag_engine.answer_question(
                     user_question,
-                    n_results=4,
+                    n_results=top_k_val,
+                    distance_threshold=dist_thresh_val,
                     source_filter=active_filter,
                     chat_history=st.session_state.messages[:-1]
                 )
                 answer_text = result["answer"]
                 sources = result.get("sources", [])
+                latency = result.get("latency_ms", 0.0)
 
                 st.markdown(answer_text)
                 if sources:
-                    with st.expander(f"🔍 Cited Sources ({len(sources)} Chunks)"):
+                    with st.expander(f"🔍 Cited Sources ({len(sources)} Chunks | ⚡ {latency}ms)"):
                         for s in sources:
+                            conf_pct = s.get("confidence", 85)
                             st.markdown(f"""
                             <div class="source-box">
-                                <strong>📄 {s['source']} — Page {s['page']}</strong><br/>
+                                <strong>📄 {s['source']} — Page {s['page']}</strong> <span class="badge-conf">🟢 {conf_pct}% Match</span><br/>
                                 <em>"{s['text'][:300]}..."</em>
                             </div>
                             """, unsafe_allow_html=True)
@@ -232,7 +258,8 @@ with tab_chat:
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer_text,
-            "sources": sources
+            "sources": sources,
+            "latency_ms": latency
         })
 
 # ----------------- TAB 2: PRACTICE QUIZ -----------------
@@ -241,10 +268,23 @@ with tab_quiz:
     quiz_topic = st.text_input("Quiz Topic / Concept Keyword", value="operating system concepts")
     n_q = st.slider("Number of Questions", min_value=1, max_value=10, value=5)
 
-    if st.button("🚀 Generate Quiz Now", type="primary"):
-        with st.spinner("Analyzing study materials & creating practice quiz..."):
-            quiz_data = st.session_state.rag_engine.generate_quiz(topic=quiz_topic, n_questions=n_q)
-            st.session_state.current_quiz = quiz_data
+    col_btn1, col_btn2 = st.columns([2, 1])
+    with col_btn1:
+        if st.button("🚀 Generate Quiz Now", type="primary", use_container_width=True):
+            with st.spinner("Analyzing study materials & creating practice quiz..."):
+                quiz_data = st.session_state.rag_engine.generate_quiz(topic=quiz_topic, n_questions=n_q)
+                st.session_state.current_quiz = quiz_data
+
+    with col_btn2:
+        if "current_quiz" in st.session_state and st.session_state.current_quiz:
+            quiz_md = export_quiz(st.session_state.current_quiz, topic=quiz_topic)
+            st.download_button(
+                "📥 Export Quiz (.md)",
+                data=quiz_md,
+                file_name=f"practice_quiz_{quiz_topic.replace(' ', '_')}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
 
     if "current_quiz" in st.session_state and st.session_state.current_quiz:
         st.markdown("---")
@@ -272,4 +312,5 @@ with tab_kb:
             st.markdown("### Uploaded Files:")
             for s in kb_stats["sources"]:
                 st.markdown(f"- 📄 **{s}**")
+
 
