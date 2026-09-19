@@ -94,23 +94,23 @@ Open your browser at `http://localhost:8501`.
 
 ## 🧪 Running Tests & Evaluation
 
-Run the unit and integration tests:
+Run the unit, integration, and benchmark test suites:
 
 ```bash
-# 1. Test PDF Text Extraction
-python -m tests.test_pdf_processor
+# 1. Test Multi-Format Document Extraction (PDF, TXT, MD)
+python -m tests.test_document_processor
 
-# 2. Test Text Chunking
-python -m tests.test_chunker
+# 2. Test Hybrid BM25 + Dense Vector Search
+python -m tests.test_hybrid_retrieval
 
-# 3. Test ChromaDB Vector Store
-python -m tests.test_vector_store
+# 3. Test Session Exporter (Markdown Chat & Quiz Exporter)
+python -m tests.test_exporter
 
 # 4. Test RAG Engine Pipeline
 python -m tests.test_rag_engine
 
-# 5. Run Evaluation Suite
-python -m tests.test_evaluation
+# 5. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+python -m tests.benchmark_rag
 ```
 
 ---
@@ -121,25 +121,25 @@ python -m tests.test_evaluation
 rag-study-assistant/
 ├── app/
 │   ├── __init__.py
-│   ├── pdf_processor.py      # PyMuPDF document extraction & page mapping
-│   ├── text_chunker.py       # Overlapping sliding-window chunker
-│   ├── vector_store.py       # ChromaDB vector index & similarity retrieval
-│   └── rag_engine.py         # Grounded generation, citation tracking & LLM integration
+│   ├── pdf_processor.py      # Multi-format document extraction & text cleaning (.pdf, .txt, .md)
+│   ├── text_chunker.py       # Header-aware overlapping sliding-window chunker with token counts
+│   ├── vector_store.py       # ChromaDB + BM25 hybrid search index with RRF ranking
+│   ├── rag_engine.py         # Grounded LLM generation, multi-turn memory & latency metrics
+│   └── exporter.py           # Markdown exporter for study chat notes & practice quizzes
 ├── tests/
 │   ├── __init__.py
-│   ├── test_pdf_processor.py # Extraction test
-│   ├── test_chunker.py       # Chunking test
-│   ├── test_vector_store.py  # Vector store test
-│   ├── test_rag_engine.py    # End-to-end RAG test
-│   └── test_evaluation.py    # Multi-query evaluation test
+│   ├── test_document_processor.py  # Multi-format extraction test
+│   ├── test_hybrid_retrieval.py    # BM25 + Vector hybrid search test
+│   ├── test_exporter.py            # Session export test
+│   ├── test_rag_engine.py          # RAG pipeline test
+│   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
 ├── documents/
-│   └── test.pdf              # Sample study PDF
-├── chroma_db/                # Local persistent vector database (auto-created)
-├── app.py                    # Streamlit web application
-├── requirements.txt          # Python dependencies
-├── .env.example              # Environment variable template
-├── .gitignore                # Git ignore configuration
-└── README.md                 # Project documentation
+│   └── test.pdf                    # Sample study PDF
+├── app.py                          # 3-Tab Streamlit web application dashboard
+├── requirements.txt                # Python dependencies
+├── .env.example                    # Environment variable template
+├── .gitignore                      # Git ignore configuration
+└── README.md                       # Project documentation
 ```
 
 ---
