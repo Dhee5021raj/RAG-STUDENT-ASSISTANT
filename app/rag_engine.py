@@ -52,12 +52,16 @@ class RAGEngine:
         Retrieves relevant context with hybrid search and generates a grounded response with source citations.
         Supports multi-turn chat history context.
         """
+        import time
+        start_time = time.perf_counter()
+
         stats = self.vector_store.get_stats()
         if stats.get("total_chunks", 0) == 0:
             return {
                 "answer": "No study materials uploaded or indexed. Please upload your study documents first.",
                 "sources": [],
-                "mode": "no_context"
+                "mode": "no_context",
+                "latency_ms": 0.0
             }
 
         # Step 1: Retrieve relevant chunks
@@ -73,7 +77,8 @@ class RAGEngine:
             return {
                 "answer": "I cannot find information about this topic in the uploaded study materials.",
                 "sources": [],
-                "mode": "no_context"
+                "mode": "no_context",
+                "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
             }
 
         sources = [
@@ -81,7 +86,8 @@ class RAGEngine:
                 "source": chunk["source"],
                 "page": chunk["page"],
                 "text": chunk["text"],
-                "distance": chunk.get("distance", 0.0)
+                "distance": chunk.get("distance", 0.0),
+                "confidence": chunk.get("confidence", 85)
             }
             for chunk in retrieved_chunks
         ]
@@ -125,7 +131,8 @@ class RAGEngine:
                 return {
                     "answer": answer_text,
                     "sources": sources,
-                    "mode": "claude_generative"
+                    "mode": "claude_generative",
+                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
                 }
             except Exception as e:
                 fallback_answer = self._generate_local_extractive_answer(question, retrieved_chunks)
@@ -133,7 +140,8 @@ class RAGEngine:
                 return {
                     "answer": fallback_answer,
                     "sources": sources,
-                    "mode": "local_fallback"
+                    "mode": "local_fallback",
+                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
                 }
 
         # Step 3: Local Extractive Mode (when no API key is provided)
@@ -141,7 +149,8 @@ class RAGEngine:
         return {
             "answer": local_answer,
             "sources": sources,
-            "mode": "local_extractive"
+            "mode": "local_extractive",
+            "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
         }
 
     def generate_quiz(self, topic: str = "core concepts", n_questions: int = 5) -> List[Dict[str, Any]]:

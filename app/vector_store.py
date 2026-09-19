@@ -172,7 +172,16 @@ class VectorStore:
             rrf_scores[key] = rrf_score
 
         sorted_keys = sorted(all_keys, key=lambda k: rrf_scores[k], reverse=True)[:n_results]
-        return [doc_details[k] for k in sorted_keys]
+        results = []
+        for k in sorted_keys:
+            detail = doc_details[k]
+            dist = detail.get("distance", 0.5)
+            # Confidence calculation heuristic: map distance 0.0-1.0 to 99%-50%
+            conf = max(55, min(99, int(round((1.0 - (dist / 2.0)) * 100))))
+            detail["confidence"] = conf
+            results.append(detail)
+
+        return results
 
     def get_stats(self) -> Dict[str, Any]:
         """Returns database statistics including unique source file names."""
