@@ -9,15 +9,32 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def extract_section_title(text: str) -> str:
+    """Extracts the first heading (# or CAPS heading) found in a text snippet."""
+    match = re.search(r'^(?:#{1,6}\s+(.+)$|([A-Z0-9\s]{4,}:.+)$)', text, re.MULTILINE)
+    if match:
+        title = match.group(1) or match.group(2)
+        return title.strip()
+    return "General Section"
+
+
 def _find_split_point(text: str, target_end: int, min_end: int) -> int:
     """
     Finds the best split point near target_end (paragraphs > sentences > words)
-    without going below min_end.
+    without going below min_end and avoiding cutting Markdown tables in half.
     """
     if target_end >= len(text):
         return len(text)
 
     window = text[min_end:target_end]
+
+    # Priority 0: Avoid splitting inside a Markdown table
+    table_match = re.search(r'(\|[^\n]+\|\n)+', text[min_end - 50:target_end + 100])
+    if table_match and table_match.start() < (target_end - min_end + 50) < table_match.end():
+        # Advance past the end of the table
+        new_end = min_end - 50 + table_match.end()
+        if new_end <= len(text):
+            return new_end
 
     # Priority 1: Section headers or double newline (paragraph break)
     header_pos = re.search(r'\n(?=#{1,6}\s|[A-Z0-9\s]{4,}:|\n)', window)
@@ -55,7 +72,7 @@ def chunk_pages(
 ) -> List[Dict[str, Any]]:
     """
     Splits extracted pages into overlapping text chunks with source metadata,
-    respecting sentence, header, and word boundaries so words are not sliced in half.
+    respecting sentence, header, table, and word boundaries.
     """
     chunks: List[Dict[str, Any]] = []
     chunk_index = 0
@@ -64,7 +81,6 @@ def chunk_pages(
         page_number = page.get("page", 1)
         text = page.get("text", "").strip()
 
-        # Skip blank or near-empty pages
         if len(text) < 20:
             continue
 
@@ -88,6 +104,7 @@ def chunk_pages(
                     "page": page_number,
                     "source_file": source_file,
                     "chunk_index": chunk_index,
+                    "section_title": extract_section_title(chunk_text),
                     "token_count": estimate_tokens(chunk_text),
                     "char_count": len(chunk_text)
                 })
@@ -96,14 +113,11 @@ def chunk_pages(
             if end >= text_len:
                 break
 
-            # Calculate next start position with overlap
             next_start = max(start + 1, end - overlap)
-            # If next_start falls in the middle of a word, advance to the start of the next word
             if next_start < end and next_start > 0 and not text[next_start - 1].isspace() and not text[next_start].isspace():
                 while next_start < end and not text[next_start].isspace():
                     next_start += 1
 
-            # Skip any whitespace
             while next_start < end and text[next_start].isspace():
                 next_start += 1
 
