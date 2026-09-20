@@ -92,12 +92,16 @@ class RAGEngine:
             for chunk in retrieved_chunks
         ]
 
+        # Apply passage context compression & deduplication
+        retrieved_chunks = self._compress_and_deduplicate_context(retrieved_chunks)
+
         # Step 2: Generation via Claude (if API key available)
         if self._anthropic_client:
             try:
                 context_blocks = []
                 for c in retrieved_chunks:
-                    context_blocks.append(f"[Document: {c['source']}, Page: {c['page']}]\n{c['text']}")
+                    section_info = f" | Section: {c.get('section_title', 'General')}" if c.get('section_title') else ""
+                    context_blocks.append(f"[Document: {c['source']} | Page: {c['page']}{section_info}]\n{c['text']}")
                 context_str = "\n\n---\n\n".join(context_blocks)
 
                 history_context = ""
@@ -199,6 +203,44 @@ class RAGEngine:
             })
         return quiz
 
+    def generate_flashcards(self, topic: str = "core concepts", n_cards: int = 5) -> List[Dict[str, str]]:
+        """Generates interactive flashcards with front (question/concept) and back (explanation)."""
+        chunks = self.vector_store.query(topic, n_results=5, use_hybrid=True)
+        if not chunks:
+            return []
+
+        if self._anthropic_client:
+            try:
+                context_str = "\n".join([c["text"] for c in chunks])
+                prompt = (
+                    f"Based on the study materials about '{topic}', generate {n_cards} study flashcards.\n"
+                    "Return ONLY valid JSON array format like:\n"
+                    '[{"front": "Term / Question", "back": "Definition / Detailed Answer", "source": "Doc reference"}]\n\n'
+                    f"Context:\n{context_str}"
+                )
+                res = self._anthropic_client.messages.create(
+                    model="claude-3-5-haiku-20241022",
+                    max_tokens=1200,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                raw_json = res.content[0].text.strip()
+                start = raw_json.find("[")
+                end = raw_json.rfind("]") + 1
+                if start != -1 and end > start:
+                    return json.loads(raw_json[start:end])
+            except Exception as e:
+                print(f"Flashcard API error: {e}")
+
+        # Local Extractive Fallback
+        cards = []
+        for i, chunk in enumerate(chunks[:n_cards], 1):
+            cards.append({
+                "front": f"Card {i}: {chunk.get('section_title', 'Core Concept')}",
+                "back": chunk["text"][:250] + "...",
+                "source": f"{chunk['source']} (Page {chunk['page']})"
+            })
+        return cards
+
     def _generate_local_extractive_answer(self, question: str, chunks: List[Dict[str, Any]]) -> str:
         """Extracts and formats grounded answers directly from retrieved passages without external API calls."""
         response_lines = [
@@ -219,4 +261,26 @@ class RAGEngine:
         response_lines.append("💡 *Tip: Running in Local Retrieval Mode (No API key required). To enable full conversational AI explanations, add an `ANTHROPIC_API_KEY` in the sidebar or `.env` file.*")
 
         return "\n".join(response_lines)
+
+    def _compress_and_deduplicate_context(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicates overlapping or identical sentences across retrieved chunks to construct concise context."""
+        seen_signatures = set()
+        compressed_chunks = []
+
+        for chunk in chunks:
+            raw_text = chunk.get("text", "")
+            sentences = [s.strip() for s in raw_text.split(".") if s.strip()]
+            unique_sentences = []
+            for sentence in sentences:
+                sig = sentence.lower()[:50]
+                if sig not in seen_signatures:
+                    seen_signatures.add(sig)
+                    unique_sentences.append(sentence)
+
+            if unique_sentences:
+                clean_chunk = dict(chunk)
+                clean_chunk["text"] = ". ".join(unique_sentences) + "."
+                compressed_chunks.append(clean_chunk)
+
+        return compressed_chunks or chunks
 
