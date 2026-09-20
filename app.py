@@ -7,7 +7,8 @@ from app.pdf_processor import extract_text_from_file
 from app.text_chunker import chunk_pages
 from app.vector_store import VectorStore
 from app.rag_engine import RAGEngine
-from app.exporter import export_chat_history, export_quiz
+from app.exporter import export_chat_history, export_quiz, export_flashcards
+from app.history_tracker import log_query, get_history_records, clear_history
 
 load_dotenv()
 
@@ -254,13 +255,22 @@ with tab_chat:
                             </div>
                             """, unsafe_allow_html=True)
 
-        # Save to message history
+        # Save to message history & analytics log
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer_text,
             "sources": sources,
             "latency_ms": latency
         })
+
+        top_src = sources[0]["source"] if sources else "None"
+        log_query(
+            question=user_question,
+            mode=result.get("mode", "unknown"),
+            latency_ms=latency,
+            n_sources=len(sources),
+            top_source=top_src
+        )
 
 # ----------------- TAB 2: PRACTICE QUIZ -----------------
 with tab_quiz:
@@ -299,6 +309,35 @@ with tab_quiz:
                 st.info(f"💡 Explanation: {q['explanation']}")
             st.markdown("---")
 
+    st.divider()
+    st.subheader("🎴 Generate Flashcard Deck")
+    card_topic = st.text_input("Flashcard Topic", value="core concepts", key="fc_topic")
+    n_cards_val = st.slider("Number of Cards", min_value=1, max_value=10, value=5, key="fc_count")
+
+    col_fc1, col_fc2 = st.columns([2, 1])
+    with col_fc1:
+        if st.button("🎴 Generate Flashcards Now", type="primary", use_container_width=True):
+            with st.spinner("Generating flashcard deck..."):
+                st.session_state.current_flashcards = st.session_state.rag_engine.generate_flashcards(topic=card_topic, n_cards=n_cards_val)
+
+    with col_fc2:
+        if "current_flashcards" in st.session_state and st.session_state.current_flashcards:
+            fc_md = export_flashcards(st.session_state.current_flashcards, topic=card_topic)
+            st.download_button(
+                "📥 Export Flashcards (.md)",
+                data=fc_md,
+                file_name=f"flashcards_{card_topic.replace(' ', '_')}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+
+    if "current_flashcards" in st.session_state and st.session_state.current_flashcards:
+        st.markdown("---")
+        for idx, card in enumerate(st.session_state.current_flashcards, 1):
+            with st.expander(f"🎴 Flashcard {idx}: {card['front']}"):
+                st.markdown(f"**Answer / Definition:**\n{card['back']}")
+                st.caption(f"Source: {card['source']}")
+
 # ----------------- TAB 3: KNOWLEDGE BASE -----------------
 with tab_kb:
     st.subheader("📋 Indexed Document Directory")
@@ -312,5 +351,16 @@ with tab_kb:
             st.markdown("### Uploaded Files:")
             for s in kb_stats["sources"]:
                 st.markdown(f"- 📄 **{s}**")
+
+    st.divider()
+    st.subheader("📊 Query Analytics & History Log")
+    history_logs = get_history_records(limit=25)
+    if not history_logs:
+        st.info("No query logs recorded yet. Ask questions in Tab 1 to track analytics.")
+    else:
+        st.dataframe(history_logs, use_container_width=True)
+        if st.button("🧹 Clear Query History"):
+            clear_history()
+            st.rerun()
 
 

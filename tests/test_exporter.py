@@ -1,4 +1,4 @@
-from app.exporter import export_chat_history, export_quiz
+from app.exporter import export_chat_history, export_quiz, export_flashcards
 
 def test_export_chat_history():
     messages = [
@@ -30,11 +30,21 @@ def test_export_quiz():
     assert "Answer Key & Explanations" in md_quiz
     print("[PASS] Quiz export verified")
 
+def test_export_flashcards():
+    cards = [
+        {"front": "Virtual Memory", "back": "Abstraction of main memory.", "source": "os.pdf (Page 55)"}
+    ]
+    md_cards = export_flashcards(cards, topic="OS Memory")
+    assert "Flashcard Deck — OS Memory" in md_cards
+    assert "Virtual Memory" in md_cards
+    print("[PASS] Flashcard export verified")
+
 def main():
     print("=== Running Exporter Unit Tests ===")
     test_export_chat_history()
     test_export_quiz()
-    print("=== All Commit 5 Tests Passed! ===")
+    test_export_flashcards()
+    print("=== All Commit 5 & 11 Exporter Tests Passed! ===")
 
 if __name__ == "__main__":
     main()

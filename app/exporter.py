@@ -59,3 +59,26 @@ def export_quiz(quiz_data: List[Dict[str, Any]], topic: str = "General Concepts"
         lines.append("")
 
     return "\n".join(lines)
+
+
+def export_flashcards(flashcards: List[Dict[str, str]], topic: str = "General Concepts") -> str:
+    """Exports interactive flashcards into a printable Markdown flashcard deck format."""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines = [
+        f"# 🎴 Flashcard Deck — {topic}",
+        f"**Generated On:** {timestamp}",
+        "---",
+        ""
+    ]
+
+    for idx, card in enumerate(flashcards, 1):
+        lines.append(f"## 🎴 Card {idx}")
+        lines.append(f"**Front (Concept):** {card.get('front', '')}")
+        lines.append("")
+        lines.append(f"**Back (Answer):** {card.get('back', '')}")
+        lines.append(f"*Source:* {card.get('source', '')}")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+    return "\n".join(lines)
