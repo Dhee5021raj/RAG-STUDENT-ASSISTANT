@@ -23,6 +23,7 @@ chroma_db_benchmark/
 tmp/
 *.tmp
 temp/
+query_history.json
 
 # IDE & OS Files
 .vscode/
