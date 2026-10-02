@@ -146,6 +146,11 @@ with st.sidebar:
 
     top_k_val = st.slider("Top-K Retrieved Chunks", min_value=1, max_value=10, value=4)
     dist_thresh_val = st.slider("Distance Threshold", min_value=0.5, max_value=2.0, value=1.25, step=0.05)
+    use_multi_query_toggle = st.checkbox(
+        "🔍 Multi-Query Expansion",
+        value=False,
+        help="Decomposes compound questions into sub-queries for broader semantic recall across multi-part topics."
+    )
 
     # Database Statistics
     st.divider()
@@ -201,6 +206,8 @@ with tab_chat:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg.get("expanded_queries") and len(msg["expanded_queries"]) > 1:
+                st.caption("🔍 Decomposed Sub-Queries: " + " • ".join([f"`{q}`" for q in msg["expanded_queries"][1:]]))
             if "sources" in msg and msg["sources"]:
                 latency_str = f" | ⚡ {msg.get('latency_ms', 0)}ms" if "latency_ms" in msg else ""
                 with st.expander(f"🔍 Cited Sources ({len(msg['sources'])} Chunks{latency_str})"):
@@ -237,13 +244,17 @@ with tab_chat:
                     n_results=top_k_val,
                     distance_threshold=dist_thresh_val,
                     source_filter=active_filter,
-                    chat_history=st.session_state.messages[:-1]
+                    chat_history=st.session_state.messages[:-1],
+                    use_multi_query=use_multi_query_toggle
                 )
                 answer_text = result["answer"]
                 sources = result.get("sources", [])
                 latency = result.get("latency_ms", 0.0)
+                expanded = result.get("expanded_queries", [])
 
                 st.markdown(answer_text)
+                if expanded and len(expanded) > 1:
+                    st.caption("🔍 Decomposed Sub-Queries: " + " • ".join([f"`{q}`" for q in expanded[1:]]))
                 if sources:
                     with st.expander(f"🔍 Cited Sources ({len(sources)} Chunks | ⚡ {latency}ms)"):
                         for s in sources:
@@ -260,7 +271,8 @@ with tab_chat:
             "role": "assistant",
             "content": answer_text,
             "sources": sources,
-            "latency_ms": latency
+            "latency_ms": latency,
+            "expanded_queries": expanded
         })
 
         top_src = sources[0]["source"] if sources else "None"

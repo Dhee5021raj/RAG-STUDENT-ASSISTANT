@@ -115,7 +115,10 @@ python -m tests.test_advanced_chunker
 # 6. Test Context Compression & Sentence Deduplication
 python -m tests.test_context_compression
 
-# 7. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+# 7. Test Multi-Query Expansion & Decomposition
+python -m tests.test_query_expander
+
+# 8. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
 python -m tests.benchmark_rag
 ```
 
@@ -130,7 +133,8 @@ rag-study-assistant/
 │   ├── pdf_processor.py      # Multi-format document extraction & text cleaning (.pdf, .txt, .md)
 │   ├── text_chunker.py       # Header & table-aware chunker with section title extraction
 │   ├── vector_store.py       # ChromaDB + BM25 hybrid search index with RRF ranking
-│   ├── rag_engine.py         # Grounded LLM generation, context compression & flashcards
+│   ├── rag_engine.py         # Grounded LLM generation, multi-query retrieval & memory
+│   ├── query_expander.py     # Multi-query decomposition and semantic reformulation
 │   ├── exporter.py           # Markdown exporter for chat notes, quizzes & flashcard decks
 │   └── history_tracker.py    # Persistent query log & analytics tracker
 ├── tests/
@@ -139,6 +143,7 @@ rag-study-assistant/
 │   ├── test_hybrid_retrieval.py    # BM25 + Vector hybrid search test
 │   ├── test_advanced_chunker.py    # Markdown table & section title test
 │   ├── test_context_compression.py # Sentence deduplication test
+│   ├── test_query_expander.py      # Multi-query expansion test
 │   ├── test_exporter.py            # Session & flashcard export test
 │   ├── test_rag_engine.py          # RAG pipeline test
 │   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
