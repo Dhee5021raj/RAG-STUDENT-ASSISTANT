@@ -2,6 +2,7 @@ import os
 import json
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+from app.query_expander import expand_query
 
 load_dotenv()
 
@@ -46,11 +47,12 @@ class RAGEngine:
         model: str = "claude-3-5-haiku-20241022",
         distance_threshold: Optional[float] = 1.25,
         source_filter: Optional[str] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        use_multi_query: bool = False
     ) -> Dict[str, Any]:
         """
         Retrieves relevant context with hybrid search and generates a grounded response with source citations.
-        Supports multi-turn chat history context.
+        Supports multi-turn chat history context and multi-query expansion.
         """
         import time
         start_time = time.perf_counter()
@@ -61,24 +63,40 @@ class RAGEngine:
                 "answer": "No study materials uploaded or indexed. Please upload your study documents first.",
                 "sources": [],
                 "mode": "no_context",
-                "latency_ms": 0.0
+                "latency_ms": 0.0,
+                "expanded_queries": [question]
             }
 
-        # Step 1: Retrieve relevant chunks
-        retrieved_chunks = self.vector_store.query(
-            question,
-            n_results=n_results,
-            distance_threshold=distance_threshold,
-            source_filter=source_filter,
-            use_hybrid=True
-        )
+        # Step 1: Query decomposition / expansion
+        if use_multi_query:
+            expanded_queries = expand_query(question, anthropic_client=self._anthropic_client, model=model)
+        else:
+            expanded_queries = [question]
+
+        # Step 2: Retrieve relevant chunks across all query perspectives
+        all_retrieved_map: Dict[str, Dict[str, Any]] = {}
+        for q in expanded_queries:
+            sub_chunks = self.vector_store.query(
+                q,
+                n_results=n_results,
+                distance_threshold=distance_threshold,
+                source_filter=source_filter,
+                use_hybrid=True
+            )
+            for c in sub_chunks:
+                key = f"{c.get('source')}_p{c.get('page')}_c{c.get('chunk_index', 0)}"
+                if key not in all_retrieved_map or c.get("distance", 1.0) < all_retrieved_map[key].get("distance", 1.0):
+                    all_retrieved_map[key] = c
+
+        retrieved_chunks = sorted(all_retrieved_map.values(), key=lambda x: x.get("distance", 1.0))[:n_results]
 
         if not retrieved_chunks:
             return {
                 "answer": "I cannot find information about this topic in the uploaded study materials.",
                 "sources": [],
                 "mode": "no_context",
-                "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
+                "latency_ms": round((time.perf_counter() - start_time) * 1000, 1),
+                "expanded_queries": expanded_queries
             }
 
         sources = [
@@ -95,7 +113,7 @@ class RAGEngine:
         # Apply passage context compression & deduplication
         retrieved_chunks = self._compress_and_deduplicate_context(retrieved_chunks)
 
-        # Step 2: Generation via Claude (if API key available)
+        # Step 3: Generation via Claude (if API key available)
         if self._anthropic_client:
             try:
                 context_blocks = []
@@ -106,7 +124,6 @@ class RAGEngine:
 
                 history_context = ""
                 if chat_history:
-                    # Append recent 3 conversation turns
                     recent_turns = chat_history[-6:]
                     formatted_turns = [f"{m['role'].capitalize()}: {m['content']}" for m in recent_turns]
                     history_context = "\nRecent Conversation History:\n" + "\n".join(formatted_turns) + "\n\n"
@@ -136,7 +153,8 @@ class RAGEngine:
                     "answer": answer_text,
                     "sources": sources,
                     "mode": "claude_generative",
-                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
+                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1),
+                    "expanded_queries": expanded_queries
                 }
             except Exception as e:
                 fallback_answer = self._generate_local_extractive_answer(question, retrieved_chunks)
@@ -145,16 +163,18 @@ class RAGEngine:
                     "answer": fallback_answer,
                     "sources": sources,
                     "mode": "local_fallback",
-                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
+                    "latency_ms": round((time.perf_counter() - start_time) * 1000, 1),
+                    "expanded_queries": expanded_queries
                 }
 
-        # Step 3: Local Extractive Mode (when no API key is provided)
+        # Step 4: Local Extractive Mode (when no API key is provided)
         local_answer = self._generate_local_extractive_answer(question, retrieved_chunks)
         return {
             "answer": local_answer,
             "sources": sources,
             "mode": "local_extractive",
-            "latency_ms": round((time.perf_counter() - start_time) * 1000, 1)
+            "latency_ms": round((time.perf_counter() - start_time) * 1000, 1),
+            "expanded_queries": expanded_queries
         }
 
     def generate_quiz(self, topic: str = "core concepts", n_questions: int = 5) -> List[Dict[str, Any]]:
