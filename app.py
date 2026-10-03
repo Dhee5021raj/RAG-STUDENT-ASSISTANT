@@ -9,6 +9,8 @@ from app.vector_store import VectorStore
 from app.rag_engine import RAGEngine
 from app.exporter import export_chat_history, export_quiz, export_flashcards
 from app.history_tracker import log_query, get_history_records, clear_history
+from app.synthesizer import generate_executive_summary, extract_concept_glossary
+from app.quiz_evaluator import evaluate_quiz_submission
 
 load_dotenv()
 
@@ -152,6 +154,18 @@ with st.sidebar:
         help="Decomposes compound questions into sub-queries for broader semantic recall across multi-part topics."
     )
 
+    # Pomodoro Focus Timer
+    st.divider()
+    st.subheader("⏱️ Pomodoro Study Timer")
+    timer_session = st.selectbox("Timer Interval", ["25 Min Study (Focus)", "5 Min Short Break", "15 Min Long Break"], index=0)
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        if st.button("▶️ Start Session", use_container_width=True):
+            st.toast(f"Started: {timer_session}! Stay focused on your notes.", icon="🎯")
+    with col_t2:
+        if st.button("⏹️ Reset", use_container_width=True):
+            st.toast("Timer reset.", icon="🔄")
+
     # Database Statistics
     st.divider()
     st.subheader("📊 Knowledge Base Stats")
@@ -171,8 +185,8 @@ with st.sidebar:
 st.markdown('<div class="main-title">📚 AI-Powered RAG Study Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Ask questions, generate practice quizzes, and get answers strictly grounded in your study materials with page citations & hybrid retrieval.</div>', unsafe_allow_html=True)
 
-# 3-Tab Layout
-tab_chat, tab_quiz, tab_kb = st.tabs(["💬 Chat & Grounded QA", "⚡ Practice Quiz", "📂 Knowledge Base Manager"])
+# 4-Tab Layout
+tab_chat, tab_quiz, tab_guide, tab_kb = st.tabs(["💬 Chat & QA", "⚡ Quiz & Flashcards", "📖 Study Guide & Glossary", "📂 Knowledge Base & Analytics"])
 
 # ----------------- TAB 1: CHAT -----------------
 with tab_chat:
@@ -321,6 +335,27 @@ with tab_quiz:
                 st.info(f"💡 Explanation: {q['explanation']}")
             st.markdown("---")
 
+        # Full Quiz Evaluation Mode
+        st.subheader("📊 Full Quiz Evaluation & Scoring")
+        if st.button("📝 Submit & Grade Entire Quiz", type="secondary", use_container_width=True):
+            user_answers = {}
+            for i in range(1, len(st.session_state.current_quiz) + 1):
+                user_answers[i] = st.session_state.get(f"q_{i}", "")
+            st.session_state.quiz_eval = evaluate_quiz_submission(st.session_state.current_quiz, user_answers)
+
+        if "quiz_eval" in st.session_state and st.session_state.quiz_eval:
+            ev = st.session_state.quiz_eval
+            col_sc1, col_sc2, col_sc3 = st.columns(3)
+            col_sc1.metric("Overall Score", f"{ev['score']} / {ev['total']}")
+            col_sc2.metric("Accuracy", f"{ev['percentage']}%")
+            col_sc3.metric("Mastery Rating", ev['mastery_level'])
+            st.progress(ev['percentage'] / 100.0)
+
+            if ev['revision_needed']:
+                st.warning("⚠️ Targeted Revision Needed:")
+                for rev in ev['revision_needed']:
+                    st.markdown(f"- **Q{rev['question_num']} ({rev['question']})**: *{rev['study_recommendation']}*")
+
     st.divider()
     st.subheader("🎴 Generate Flashcard Deck")
     card_topic = st.text_input("Flashcard Topic", value="core concepts", key="fc_topic")
@@ -350,7 +385,43 @@ with tab_quiz:
                 st.markdown(f"**Answer / Definition:**\n{card['back']}")
                 st.caption(f"Source: {card['source']}")
 
-# ----------------- TAB 3: KNOWLEDGE BASE -----------------
+# ----------------- TAB 3: STUDY GUIDE & GLOSSARY -----------------
+with tab_guide:
+    st.subheader("📖 Document Executive Summary & Concept Glossary")
+    st.caption("Synthesize high-level study guides and extract technical concept definitions from your uploaded documents.")
+
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        if st.button("📑 Generate Executive Summary", type="primary", use_container_width=True):
+            with st.spinner("Synthesizing executive summary..."):
+                st.session_state.exec_summary = generate_executive_summary(
+                    vector_store=st.session_state.vector_store,
+                    rag_engine=st.session_state.rag_engine,
+                    source_filter=active_filter
+                )
+
+    with col_g2:
+        if st.button("📚 Extract Concept Glossary Table", type="secondary", use_container_width=True):
+            with st.spinner("Extracting technical concepts and definitions..."):
+                st.session_state.glossary_data = extract_concept_glossary(
+                    vector_store=st.session_state.vector_store,
+                    rag_engine=st.session_state.rag_engine,
+                    source_filter=active_filter,
+                    top_n=8
+                )
+
+    if "exec_summary" in st.session_state and st.session_state.exec_summary:
+        st.markdown("---")
+        st.markdown(st.session_state.exec_summary["summary"])
+        if st.session_state.exec_summary.get("sources"):
+            st.caption("Referenced Sections: " + ", ".join(st.session_state.exec_summary["sources"]))
+
+    if "glossary_data" in st.session_state and st.session_state.glossary_data:
+        st.markdown("---")
+        st.subheader("📚 Key Concepts Glossary")
+        st.dataframe(st.session_state.glossary_data, use_container_width=True)
+
+# ----------------- TAB 4: KNOWLEDGE BASE -----------------
 with tab_kb:
     st.subheader("📋 Indexed Document Directory")
     kb_stats = st.session_state.vector_store.get_stats()

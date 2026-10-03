@@ -118,7 +118,13 @@ python -m tests.test_context_compression
 # 7. Test Multi-Query Expansion & Decomposition
 python -m tests.test_query_expander
 
-# 8. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+# 8. Test Document Synthesis & Concept Glossary Extractor
+python -m tests.test_synthesizer
+
+# 9. Test Quiz Evaluation & Revision Recommender
+python -m tests.test_quiz_evaluator
+
+# 10. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
 python -m tests.benchmark_rag
 ```
 
@@ -135,6 +141,8 @@ rag-study-assistant/
 │   ├── vector_store.py       # ChromaDB + BM25 hybrid search index with RRF ranking
 │   ├── rag_engine.py         # Grounded LLM generation, multi-query retrieval & memory
 │   ├── query_expander.py     # Multi-query decomposition and semantic reformulation
+│   ├── synthesizer.py        # Executive summaries and concept glossary extraction
+│   ├── quiz_evaluator.py     # Quiz grading engine with mastery level and revision advice
 │   ├── exporter.py           # Markdown exporter for chat notes, quizzes & flashcard decks
 │   └── history_tracker.py    # Persistent query log & analytics tracker
 ├── tests/
@@ -144,12 +152,14 @@ rag-study-assistant/
 │   ├── test_advanced_chunker.py    # Markdown table & section title test
 │   ├── test_context_compression.py # Sentence deduplication test
 │   ├── test_query_expander.py      # Multi-query expansion test
+│   ├── test_synthesizer.py         # Executive summary & glossary test
+│   ├── test_quiz_evaluator.py      # Quiz grading & revision advice test
 │   ├── test_exporter.py            # Session & flashcard export test
 │   ├── test_rag_engine.py          # RAG pipeline test
 │   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
 ├── documents/
 │   └── test.pdf                    # Sample study PDF
-├── app.py                          # 3-Tab Streamlit web application dashboard
+├── app.py                          # 4-Tab Streamlit study dashboard with Pomodoro timer
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variable template
 ├── .gitignore                      # Git ignore configuration
