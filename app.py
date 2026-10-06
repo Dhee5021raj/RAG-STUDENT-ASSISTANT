@@ -12,6 +12,7 @@ from app.history_tracker import log_query, get_history_records, clear_history
 from app.synthesizer import generate_executive_summary, extract_concept_glossary
 from app.quiz_evaluator import evaluate_quiz_submission
 from app.roadmap_generator import generate_study_roadmap
+from app.concept_graph import extract_concept_relationships
 
 load_dotenv()
 
@@ -154,6 +155,11 @@ with st.sidebar:
         value=False,
         help="Decomposes compound questions into sub-queries for broader semantic recall across multi-part topics."
     )
+    use_reranker_toggle = st.checkbox(
+        "⚡ Cross-Scoring Re-ranker",
+        value=True,
+        help="Applies multi-aspect lexical & semantic scoring to prioritize highest-relevance context chunks."
+    )
 
     # Pomodoro Focus Timer
     st.divider()
@@ -260,7 +266,8 @@ with tab_chat:
                     distance_threshold=dist_thresh_val,
                     source_filter=active_filter,
                     chat_history=st.session_state.messages[:-1],
-                    use_multi_query=use_multi_query_toggle
+                    use_multi_query=use_multi_query_toggle,
+                    use_reranker=use_reranker_toggle
                 )
                 answer_text = result["answer"]
                 sources = result.get("sources", [])
@@ -460,6 +467,27 @@ with tab_guide:
             with st.expander(f"{stg.get('title', 'Stage')} (Est. Time: {stg.get('estimated_hours', 'N/A')})"):
                 st.markdown(f"**Key Concepts:** {', '.join(stg.get('concepts', []))}")
                 st.markdown(f"**Stage Overview:** {stg.get('summary', '')}")
+
+    st.divider()
+    st.subheader("🕸️ Concept Relationship Knowledge Graph")
+    st.caption("Discover semantic connections and interconnected domain relationships across your study materials.")
+
+    if st.button("🕸️ Generate Concept Knowledge Graph", type="secondary", use_container_width=True):
+        with st.spinner("Analyzing semantic relationships across study materials..."):
+            st.session_state.concept_graph_data = extract_concept_relationships(
+                vector_store=st.session_state.vector_store,
+                rag_engine=st.session_state.rag_engine,
+                source_filter=active_filter
+            )
+
+    if "concept_graph_data" in st.session_state and st.session_state.concept_graph_data:
+        cg = st.session_state.concept_graph_data
+        st.markdown("#### 🌐 Interconnected Concept Network")
+        st.markdown(f"```mermaid\n{cg.get('mermaid_graph', '')}\n```")
+
+        if cg.get("relationships"):
+            st.markdown("#### 🔗 Discovered Concept Triples")
+            st.dataframe(cg["relationships"], use_container_width=True)
 
 # ----------------- TAB 4: KNOWLEDGE BASE -----------------
 with tab_kb:

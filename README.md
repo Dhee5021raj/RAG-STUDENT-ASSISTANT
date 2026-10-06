@@ -127,7 +127,13 @@ python -m tests.test_quiz_evaluator
 # 10. Test Prerequisite Study Roadmap & Dependency Graph Generator
 python -m tests.test_roadmap_generator
 
-# 11. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+# 11. Test Semantic Cross-Scoring Re-ranker
+python -m tests.test_reranker
+
+# 12. Test Concept Relationship Knowledge Graph Extractor
+python -m tests.test_concept_graph
+
+# 13. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
 python -m tests.benchmark_rag
 ```
 
@@ -144,9 +150,11 @@ rag-study-assistant/
 │   ├── vector_store.py       # ChromaDB + BM25 hybrid search index with RRF ranking
 │   ├── rag_engine.py         # Grounded LLM generation, multi-query retrieval & memory
 │   ├── query_expander.py     # Multi-query decomposition and semantic reformulation
+│   ├── reranker.py           # Multi-aspect cross-scoring passage reranker
 │   ├── synthesizer.py        # Executive summaries and concept glossary extraction
 │   ├── quiz_evaluator.py     # Quiz grading engine with mastery level and revision advice
 │   ├── roadmap_generator.py  # Prerequisite study roadmap & Mermaid dependency graph
+│   ├── concept_graph.py      # Knowledge graph relation extractor & network visualizer
 │   ├── exporter.py           # Markdown exporter for chat notes, quizzes, flashcards & roadmaps
 │   └── history_tracker.py    # Persistent query log & analytics tracker
 ├── tests/
@@ -159,6 +167,8 @@ rag-study-assistant/
 │   ├── test_synthesizer.py         # Executive summary & glossary test
 │   ├── test_quiz_evaluator.py      # Quiz grading & revision advice test
 │   ├── test_roadmap_generator.py   # Study roadmap & dependency graph test
+│   ├── test_reranker.py            # Cross-scoring passage reranker test
+│   ├── test_concept_graph.py       # Concept relationship knowledge graph test
 │   ├── test_exporter.py            # Session, flashcard & roadmap export test
 │   ├── test_rag_engine.py          # RAG pipeline test
 │   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
