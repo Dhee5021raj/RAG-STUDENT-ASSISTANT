@@ -3,6 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from app.query_expander import expand_query
+from app.reranker import rerank_chunks
 
 load_dotenv()
 
@@ -48,11 +49,12 @@ class RAGEngine:
         distance_threshold: Optional[float] = 1.25,
         source_filter: Optional[str] = None,
         chat_history: Optional[List[Dict[str, str]]] = None,
-        use_multi_query: bool = False
+        use_multi_query: bool = False,
+        use_reranker: bool = True
     ) -> Dict[str, Any]:
         """
         Retrieves relevant context with hybrid search and generates a grounded response with source citations.
-        Supports multi-turn chat history context and multi-query expansion.
+        Supports multi-turn chat history context, multi-query expansion, and semantic cross-scoring reranking.
         """
         import time
         start_time = time.perf_counter()
@@ -78,7 +80,7 @@ class RAGEngine:
         for q in expanded_queries:
             sub_chunks = self.vector_store.query(
                 q,
-                n_results=n_results,
+                n_results=n_results * 2 if use_reranker else n_results,
                 distance_threshold=distance_threshold,
                 source_filter=source_filter,
                 use_hybrid=True
@@ -88,9 +90,9 @@ class RAGEngine:
                 if key not in all_retrieved_map or c.get("distance", 1.0) < all_retrieved_map[key].get("distance", 1.0):
                     all_retrieved_map[key] = c
 
-        retrieved_chunks = sorted(all_retrieved_map.values(), key=lambda x: x.get("distance", 1.0))[:n_results]
+        candidate_chunks = list(all_retrieved_map.values())
 
-        if not retrieved_chunks:
+        if not candidate_chunks:
             return {
                 "answer": "I cannot find information about this topic in the uploaded study materials.",
                 "sources": [],
@@ -98,6 +100,12 @@ class RAGEngine:
                 "latency_ms": round((time.perf_counter() - start_time) * 1000, 1),
                 "expanded_queries": expanded_queries
             }
+
+        # Step 3: Semantic Cross-Scoring Reranking
+        if use_reranker and len(candidate_chunks) > 1:
+            retrieved_chunks = rerank_chunks(question, candidate_chunks, top_k=n_results)
+        else:
+            retrieved_chunks = sorted(candidate_chunks, key=lambda x: x.get("distance", 1.0))[:n_results]
 
         sources = [
             {
