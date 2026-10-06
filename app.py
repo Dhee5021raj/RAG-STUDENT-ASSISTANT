@@ -7,10 +7,11 @@ from app.pdf_processor import extract_text_from_file
 from app.text_chunker import chunk_pages
 from app.vector_store import VectorStore
 from app.rag_engine import RAGEngine
-from app.exporter import export_chat_history, export_quiz, export_flashcards
+from app.exporter import export_chat_history, export_quiz, export_flashcards, export_study_roadmap
 from app.history_tracker import log_query, get_history_records, clear_history
 from app.synthesizer import generate_executive_summary, extract_concept_glossary
 from app.quiz_evaluator import evaluate_quiz_submission
+from app.roadmap_generator import generate_study_roadmap
 
 load_dotenv()
 
@@ -420,6 +421,45 @@ with tab_guide:
         st.markdown("---")
         st.subheader("📚 Key Concepts Glossary")
         st.dataframe(st.session_state.glossary_data, use_container_width=True)
+
+    st.divider()
+    st.subheader("🗺️ Prerequisite Study Roadmap & Dependency Graph")
+    st.caption("Generate a pedagogical learning path with visual concept dependency graphs from your documents.")
+
+    rm_topic = st.text_input("Roadmap Topic Focus", value="Core Concepts", key="rm_topic")
+    col_r1, col_r2 = st.columns([2, 1])
+    with col_r1:
+        if st.button("🗺️ Generate Prerequisite Roadmap", type="primary", use_container_width=True):
+            with st.spinner("Synthesizing learning path and dependency graph..."):
+                roadmap_data = generate_study_roadmap(
+                    vector_store=st.session_state.vector_store,
+                    rag_engine=st.session_state.rag_engine,
+                    topic=rm_topic,
+                    source_filter=active_filter
+                )
+                st.session_state.current_roadmap = roadmap_data
+
+    with col_r2:
+        if "current_roadmap" in st.session_state and st.session_state.current_roadmap:
+            rm_md = export_study_roadmap(st.session_state.current_roadmap)
+            st.download_button(
+                "📥 Export Roadmap (.md)",
+                data=rm_md,
+                file_name=f"study_roadmap_{rm_topic.replace(' ', '_')}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+
+    if "current_roadmap" in st.session_state and st.session_state.current_roadmap:
+        rm = st.session_state.current_roadmap
+        st.markdown("#### 🧭 Concept Dependency Flowchart")
+        st.markdown(f"```mermaid\n{rm.get('mermaid_graph', '')}\n```")
+
+        st.markdown("#### 📚 Phased Learning Path")
+        for stg in rm.get("stages", []):
+            with st.expander(f"{stg.get('title', 'Stage')} (Est. Time: {stg.get('estimated_hours', 'N/A')})"):
+                st.markdown(f"**Key Concepts:** {', '.join(stg.get('concepts', []))}")
+                st.markdown(f"**Stage Overview:** {stg.get('summary', '')}")
 
 # ----------------- TAB 4: KNOWLEDGE BASE -----------------
 with tab_kb:

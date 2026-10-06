@@ -124,7 +124,10 @@ python -m tests.test_synthesizer
 # 9. Test Quiz Evaluation & Revision Recommender
 python -m tests.test_quiz_evaluator
 
-# 10. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+# 10. Test Prerequisite Study Roadmap & Dependency Graph Generator
+python -m tests.test_roadmap_generator
+
+# 11. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
 python -m tests.benchmark_rag
 ```
 
@@ -143,7 +146,8 @@ rag-study-assistant/
 │   ├── query_expander.py     # Multi-query decomposition and semantic reformulation
 │   ├── synthesizer.py        # Executive summaries and concept glossary extraction
 │   ├── quiz_evaluator.py     # Quiz grading engine with mastery level and revision advice
-│   ├── exporter.py           # Markdown exporter for chat notes, quizzes & flashcard decks
+│   ├── roadmap_generator.py  # Prerequisite study roadmap & Mermaid dependency graph
+│   ├── exporter.py           # Markdown exporter for chat notes, quizzes, flashcards & roadmaps
 │   └── history_tracker.py    # Persistent query log & analytics tracker
 ├── tests/
 │   ├── __init__.py
@@ -154,7 +158,8 @@ rag-study-assistant/
 │   ├── test_query_expander.py      # Multi-query expansion test
 │   ├── test_synthesizer.py         # Executive summary & glossary test
 │   ├── test_quiz_evaluator.py      # Quiz grading & revision advice test
-│   ├── test_exporter.py            # Session & flashcard export test
+│   ├── test_roadmap_generator.py   # Study roadmap & dependency graph test
+│   ├── test_exporter.py            # Session, flashcard & roadmap export test
 │   ├── test_rag_engine.py          # RAG pipeline test
 │   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
 ├── documents/
