@@ -82,3 +82,39 @@ def export_flashcards(flashcards: List[Dict[str, str]], topic: str = "General Co
         lines.append("")
 
     return "\n".join(lines)
+
+
+def export_study_roadmap(roadmap_data: Dict[str, Any]) -> str:
+    """Exports prerequisite study roadmap into a structured Markdown study plan with Mermaid graph."""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    topic = roadmap_data.get("topic", "Study Topic")
+    lines = [
+        f"# 🗺️ Prerequisite Study Roadmap — {topic}",
+        f"**Generated On:** {timestamp}",
+        "---",
+        "",
+        "## 🧭 Concept Dependency Graph",
+        "```mermaid",
+        roadmap_data.get("mermaid_graph", "graph TD\n    A[Foundations] --> B[Advanced]"),
+        "```",
+        "",
+        "## 📚 Phased Learning Path",
+        "---",
+        ""
+    ]
+
+    for stage in roadmap_data.get("stages", []):
+        lines.append(f"### {stage.get('title', 'Stage')}")
+        lines.append(f"⏱️ **Estimated Time:** {stage.get('estimated_hours', 'N/A')}")
+        concepts = ", ".join(stage.get("concepts", []))
+        lines.append(f"🎯 **Core Concepts:** {concepts}")
+        lines.append(f"📖 **Overview:** {stage.get('summary', '')}")
+        lines.append("")
+
+    if roadmap_data.get("sources"):
+        lines.append("## 📄 Referenced Source Materials")
+        for s in roadmap_data["sources"]:
+            lines.append(f"- {s}")
+        lines.append("")
+
+    return "\n".join(lines)

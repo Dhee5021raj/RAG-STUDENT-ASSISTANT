@@ -1,4 +1,4 @@
-from app.exporter import export_chat_history, export_quiz, export_flashcards
+from app.exporter import export_chat_history, export_quiz, export_flashcards, export_study_roadmap
 
 def test_export_chat_history():
     messages = [
@@ -39,12 +39,28 @@ def test_export_flashcards():
     assert "Virtual Memory" in md_cards
     print("[PASS] Flashcard export verified")
 
+def test_export_study_roadmap():
+    roadmap = {
+        "topic": "Operating Systems",
+        "stages": [
+            {"title": "Stage 1: Core", "estimated_hours": "3 hrs", "concepts": ["CPU"], "summary": "Core basics"}
+        ],
+        "mermaid_graph": "graph TD\n    A[Start] --> B[End]",
+        "sources": ["os.pdf (Page 1)"]
+    }
+    md_roadmap = export_study_roadmap(roadmap)
+    assert "Prerequisite Study Roadmap — Operating Systems" in md_roadmap
+    assert "graph TD" in md_roadmap
+    assert "Stage 1: Core" in md_roadmap
+    print("[PASS] Study roadmap export verified")
+
 def main():
     print("=== Running Exporter Unit Tests ===")
     test_export_chat_history()
     test_export_quiz()
     test_export_flashcards()
-    print("=== All Commit 5 & 11 Exporter Tests Passed! ===")
+    test_export_study_roadmap()
+    print("=== All Exporter Tests Passed! ===")
 
 if __name__ == "__main__":
     main()
