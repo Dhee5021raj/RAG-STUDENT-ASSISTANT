@@ -15,6 +15,7 @@ from app.roadmap_generator import generate_study_roadmap
 from app.concept_graph import extract_concept_relationships
 from app.socratic_tutor import generate_socratic_prompt, evaluate_student_explanation
 from app.spaced_repetition import schedule_card_review, generate_deck_review_summary
+from app.comparator import compare_documents_on_topic
 
 load_dotenv()
 
@@ -576,6 +577,52 @@ with tab_guide:
         if cg.get("relationships"):
             st.markdown("#### 🔗 Discovered Concept Triples")
             st.dataframe(cg["relationships"], use_container_width=True)
+
+    st.divider()
+    st.subheader("🔄 Cross-Document Topic Comparison")
+    st.caption("Compare and contrast how different study materials (e.g. textbook vs lecture slides) cover a topic.")
+
+    all_files = st.session_state.processed_files
+    if len(all_files) < 2:
+        st.info("💡 Upload at least two documents in the sidebar to enable cross-document comparative analysis.")
+    else:
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            doc_a = st.selectbox("Document A", options=all_files, index=0, key="comp_doc_a")
+        with col_c2:
+            doc_b = st.selectbox("Document B", options=all_files, index=1 if len(all_files) > 1 else 0, key="comp_doc_b")
+
+        comp_topic = st.text_input("Comparison Topic", value="CPU Scheduling", key="comp_topic_input")
+        if st.button("⚖️ Compare Documents on Topic", type="secondary", use_container_width=True):
+            with st.spinner(f"Comparing '{comp_topic}' across {doc_a} and {doc_b}..."):
+                st.session_state.comparison_result = compare_documents_on_topic(
+                    vector_store=st.session_state.vector_store,
+                    rag_engine=st.session_state.rag_engine,
+                    topic=comp_topic,
+                    doc1=doc_a,
+                    doc2=doc_b
+                )
+
+        if "comparison_result" in st.session_state and st.session_state.comparison_result:
+            cmp_res = st.session_state.comparison_result
+            st.markdown("---")
+            st.markdown(f"#### ⚖️ Comparison Summary: *{cmp_res.get('topic', '')}*")
+            st.markdown(f"**Synthesis:** {cmp_res.get('comparison_summary', '')}")
+
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                st.markdown(f"**Unique to {cmp_res.get('doc1')}:**")
+                for u in cmp_res.get("doc1_unique", []):
+                    st.markdown(f"- {u}")
+            with col_s2:
+                st.markdown(f"**Unique to {cmp_res.get('doc2')}:**")
+                for u in cmp_res.get("doc2_unique", []):
+                    st.markdown(f"- {u}")
+
+            if cmp_res.get("shared_points"):
+                st.markdown("**Shared Core Concepts:**")
+                for sp in cmp_res["shared_points"]:
+                    st.markdown(f"- {sp}")
 
 # ----------------- TAB 5: KNOWLEDGE BASE -----------------
 with tab_kb:
