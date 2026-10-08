@@ -133,7 +133,10 @@ python -m tests.test_reranker
 # 12. Test Concept Relationship Knowledge Graph Extractor
 python -m tests.test_concept_graph
 
-# 13. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
+# 13. Test Socratic Active Recall & Dialogue Coach
+python -m tests.test_socratic_tutor
+
+# 14. Run Quantitative RAG Evaluation & Benchmarking (MRR & Precision@K)
 python -m tests.benchmark_rag
 ```
 
@@ -155,6 +158,7 @@ rag-study-assistant/
 │   ├── quiz_evaluator.py     # Quiz grading engine with mastery level and revision advice
 │   ├── roadmap_generator.py  # Prerequisite study roadmap & Mermaid dependency graph
 │   ├── concept_graph.py      # Knowledge graph relation extractor & network visualizer
+│   ├── socratic_tutor.py     # Socratic diagnostic probe questions & active recall evaluator
 │   ├── exporter.py           # Markdown exporter for chat notes, quizzes, flashcards & roadmaps
 │   └── history_tracker.py    # Persistent query log & analytics tracker
 ├── tests/
@@ -169,12 +173,13 @@ rag-study-assistant/
 │   ├── test_roadmap_generator.py   # Study roadmap & dependency graph test
 │   ├── test_reranker.py            # Cross-scoring passage reranker test
 │   ├── test_concept_graph.py       # Concept relationship knowledge graph test
+│   ├── test_socratic_tutor.py      # Socratic active recall & explanation evaluation test
 │   ├── test_exporter.py            # Session, flashcard & roadmap export test
 │   ├── test_rag_engine.py          # RAG pipeline test
 │   └── benchmark_rag.py            # MRR & Precision@K benchmarking suite
 ├── documents/
 │   └── test.pdf                    # Sample study PDF
-├── app.py                          # 4-Tab Streamlit study dashboard with Pomodoro timer
+├── app.py                          # 5-Tab Streamlit study dashboard with Socratic recall & Pomodoro timer
 ├── requirements.txt                # Python dependencies
 ├── .env.example                    # Environment variable template
 ├── .gitignore                      # Git ignore configuration

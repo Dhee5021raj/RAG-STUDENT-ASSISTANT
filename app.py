@@ -13,6 +13,8 @@ from app.synthesizer import generate_executive_summary, extract_concept_glossary
 from app.quiz_evaluator import evaluate_quiz_submission
 from app.roadmap_generator import generate_study_roadmap
 from app.concept_graph import extract_concept_relationships
+from app.socratic_tutor import generate_socratic_prompt, evaluate_student_explanation
+from app.spaced_repetition import schedule_card_review, generate_deck_review_summary
 
 load_dotenv()
 
@@ -192,8 +194,8 @@ with st.sidebar:
 st.markdown('<div class="main-title">📚 AI-Powered RAG Study Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Ask questions, generate practice quizzes, and get answers strictly grounded in your study materials with page citations & hybrid retrieval.</div>', unsafe_allow_html=True)
 
-# 4-Tab Layout
-tab_chat, tab_quiz, tab_guide, tab_kb = st.tabs(["💬 Chat & QA", "⚡ Quiz & Flashcards", "📖 Study Guide & Glossary", "📂 Knowledge Base & Analytics"])
+# 5-Tab Layout
+tab_chat, tab_quiz, tab_tutor, tab_guide, tab_kb = st.tabs(["💬 Chat & QA", "⚡ Quiz & Flashcards", "🧠 Socratic Recall", "📖 Study Guide & Roadmap", "📂 Knowledge Base & Analytics"])
 
 # ----------------- TAB 1: CHAT -----------------
 with tab_chat:
@@ -388,12 +390,98 @@ with tab_quiz:
 
     if "current_flashcards" in st.session_state and st.session_state.current_flashcards:
         st.markdown("---")
+        deck_stats = generate_deck_review_summary(st.session_state.current_flashcards)
+        col_ds1, col_ds2, col_ds3 = st.columns(3)
+        col_ds1.metric("🌱 Learning (1d)", deck_stats["learning"])
+        col_ds2.metric("🔄 Reviewing (2-6d)", deck_stats["reviewing"])
+        col_ds3.metric("🏆 Mastered (>6d)", deck_stats["mastered"])
+
         for idx, card in enumerate(st.session_state.current_flashcards, 1):
-            with st.expander(f"🎴 Flashcard {idx}: {card['front']}"):
+            next_date = card.get("next_review_date", "Pending First Review")
+            with st.expander(f"🎴 Flashcard {idx}: {card['front']} (📅 Due: {next_date})"):
                 st.markdown(f"**Answer / Definition:**\n{card['back']}")
                 st.caption(f"Source: {card['source']}")
 
-# ----------------- TAB 3: STUDY GUIDE & GLOSSARY -----------------
+                st.markdown("##### 🧠 How well did you recall this?")
+                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                with col_r1:
+                    if st.button("🔴 Again (1d)", key=f"srs_again_{idx}", use_container_width=True):
+                        st.session_state.current_flashcards[idx-1] = schedule_card_review(card, "again")
+                        st.rerun()
+                with col_r2:
+                    if st.button("🟡 Hard (2d)", key=f"srs_hard_{idx}", use_container_width=True):
+                        st.session_state.current_flashcards[idx-1] = schedule_card_review(card, "hard")
+                        st.rerun()
+                with col_r3:
+                    if st.button("🟢 Good (4d)", key=f"srs_good_{idx}", use_container_width=True):
+                        st.session_state.current_flashcards[idx-1] = schedule_card_review(card, "good")
+                        st.rerun()
+                with col_r4:
+                    if st.button("⭐ Easy (7d)", key=f"srs_easy_{idx}", use_container_width=True):
+                        st.session_state.current_flashcards[idx-1] = schedule_card_review(card, "easy")
+                        st.rerun()
+
+# ----------------- TAB 3: SOCRATIC ACTIVE RECALL -----------------
+with tab_tutor:
+    st.subheader("🧠 Socratic Active Recall & Conceptual Drill")
+    st.caption("Transform passive reading into active learning. Answer deep conceptual probes in your own words and receive grounded Socratic critique.")
+
+    tutor_topic = st.text_input("Active Recall Topic", value="Process Synchronization", key="tutor_topic_input")
+    if st.button("🎯 Generate Socratic Probe Question", type="primary", use_container_width=True):
+        with st.spinner("Formulating diagnostic probe question from study materials..."):
+            st.session_state.socratic_data = generate_socratic_prompt(
+                vector_store=st.session_state.vector_store,
+                rag_engine=st.session_state.rag_engine,
+                topic=tutor_topic,
+                source_filter=active_filter
+            )
+            st.session_state.socratic_evaluation = None
+
+    if "socratic_data" in st.session_state and st.session_state.socratic_data:
+        soc = st.session_state.socratic_data
+        st.markdown("---")
+        st.info(f"**🧐 Socratic Challenge Question:**\n\n### {soc['probe_question']}")
+        if soc.get("expected_concepts"):
+            st.caption("Key Concept Anchors: " + ", ".join([f"`{c}`" for c in soc["expected_concepts"][:4]]))
+
+        student_ans = st.text_area(
+            "Write your conceptual explanation (in your own words):",
+            placeholder="Explain the mechanism, why it exists, and how the components interact...",
+            height=160,
+            key="student_socratic_response"
+        )
+
+        if st.button("🔍 Evaluate My Understanding", type="secondary", use_container_width=True):
+            with st.spinner("Analyzing your explanation against textbook principles..."):
+                eval_res = evaluate_student_explanation(
+                    vector_store=st.session_state.vector_store,
+                    rag_engine=st.session_state.rag_engine,
+                    topic=tutor_topic,
+                    question=soc["probe_question"],
+                    student_answer=student_ans,
+                    source_filter=active_filter
+                )
+                st.session_state.socratic_evaluation = eval_res
+
+        if "socratic_evaluation" in st.session_state and st.session_state.socratic_evaluation:
+            ev = st.session_state.socratic_evaluation
+            st.markdown("---")
+            col_m1, col_m2 = st.columns([1, 1])
+            col_m1.metric("Conceptual Coverage", f"{ev['score_pct']}%")
+            col_m2.metric("Tutor Evaluation", ev['grade'])
+            st.progress(ev['score_pct'] / 100.0)
+
+            st.markdown(f"**💬 Socratic Feedback:**\n\n{ev['feedback']}")
+
+            if ev.get("missed_concepts"):
+                st.warning("⚠️ Critical Concepts to Review:")
+                for mc in ev["missed_concepts"]:
+                    st.markdown(f"- **{mc}**")
+
+            if ev.get("follow_up_question"):
+                st.info(f"**🚀 Next Level Challenge:**\n\n*{ev['follow_up_question']}*")
+
+# ----------------- TAB 4: STUDY GUIDE & GLOSSARY -----------------
 with tab_guide:
     st.subheader("📖 Document Executive Summary & Concept Glossary")
     st.caption("Synthesize high-level study guides and extract technical concept definitions from your uploaded documents.")
@@ -489,7 +577,7 @@ with tab_guide:
             st.markdown("#### 🔗 Discovered Concept Triples")
             st.dataframe(cg["relationships"], use_container_width=True)
 
-# ----------------- TAB 4: KNOWLEDGE BASE -----------------
+# ----------------- TAB 5: KNOWLEDGE BASE -----------------
 with tab_kb:
     st.subheader("📋 Indexed Document Directory")
     kb_stats = st.session_state.vector_store.get_stats()
